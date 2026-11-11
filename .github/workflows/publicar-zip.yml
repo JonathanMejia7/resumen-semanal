@@ -1,0 +1,47 @@
+# Cada vez que cambia la skill, arma resumen-semanal.zip y lo publica como versión nueva.
+# La web descarga siempre la última: releases/latest/download/resumen-semanal.zip
+name: Publicar zip
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SKILL.md"
+      - "LEEME.md"
+      - "scripts/**"
+      - "LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Armar el zip
+        run: |
+          mkdir -p dist/resumen-semanal
+          cp -r SKILL.md LEEME.md LICENSE scripts dist/resumen-semanal/
+          find dist -name "__pycache__" -prune -exec rm -rf {} +
+          cd dist && zip -rqX resumen-semanal.zip resumen-semanal
+          unzip -l resumen-semanal.zip
+
+      - name: Publicar la versión
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Una versión por día (v2026.11.11); si ya hay una ese día, se numera (v2026.11.11.2)
+          base="v$(date -u +%Y.%m.%d)"
+          etiqueta="$base"
+          n=1
+          while gh release view "$etiqueta" >/dev/null 2>&1; do
+            n=$((n + 1))
+            etiqueta="$base.$n"
+          done
+          gh release create "$etiqueta" dist/resumen-semanal.zip \
+            --title "Resumen semanal $etiqueta" \
+            --notes "Descarga resumen-semanal.zip, descomprímelo e instálalo. Tutorial: https://jonathanmejia7.github.io/recursos/resumen-semanal/#skill · Tutorial in English: https://jonathanmejia7.github.io/en/resources/resumen-semanal/#skill" \
+            --latest
